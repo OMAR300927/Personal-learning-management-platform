@@ -57,6 +57,7 @@ No separate payment, maps, or email provider is required for the MVP. Authentica
 - Derives the acting user identity from the verified token.
 - Enforces ownership and business rules for every operation.
 - Validates and persists data, performs dashboard aggregations, and exposes a versioned REST/JSON API.
+- Uses shared request validators for titles (maximum 100 characters) and absolute HTTP(S) URLs (maximum 2,048 characters), and returns client errors in a consistent JSON envelope.
 - Generates and serves the OpenAPI contract.
 
 ### Relational database
@@ -122,7 +123,7 @@ All user-owned records must be scoped to their owner. Use foreign keys and datab
 ### Authentication and authorization
 
 - Use Clerk's React integration for user authentication and session UX.
-- FastAPI verifies Clerk JWT signature, issuer, and expected audience/claims using Clerk's published verification keys and configured settings.
+- FastAPI verifies Clerk JWT signature and issuer using Clerk's published verification keys, and checks the `azp` claim against configured authorized frontend origins. Standard Clerk session tokens do not require a configured audience.
 - Every protected operation derives the user ID from the verified token and scopes database access to that user.
 - Never rely on frontend route protection as the sole authorization control.
 - Return appropriate unauthenticated/forbidden responses; the frontend handles the specified expired-session message, login redirect, return destination, and preservation of unsaved changes.

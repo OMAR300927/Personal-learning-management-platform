@@ -48,7 +48,7 @@ Design and verify the per-user encryption-key approach needed to make account da
 
 ## Phase 1 — Backend foundation
 
-- [ ] **Phase complete**
+- [x] **Phase complete**
 
 ### T-003: Scaffold the backend project
 
@@ -64,7 +64,7 @@ Create the backend project root using the approved backend structure.
 
 ### T-004: Configure backend settings and local development
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add environment-based settings, `API_PREFIX`, logging defaults, and local SQLite configuration.
 
@@ -78,7 +78,7 @@ Add environment-based settings, `API_PREFIX`, logging defaults, and local SQLite
 
 ### T-005: Set up async database sessions and migrations
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Configure async SQLAlchemy, `aiosqlite`, async session lifecycle, declarative metadata, and Alembic.
 
@@ -91,7 +91,7 @@ Configure async SQLAlchemy, `aiosqlite`, async session lifecycle, declarative me
 
 ### T-006: Establish backend test tooling
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Configure pytest and isolated temporary SQLite databases for backend tests.
 
@@ -104,7 +104,7 @@ Configure pytest and isolated temporary SQLite databases for backend tests.
 
 ### T-007: Verify Clerk tokens in the backend
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Implement Clerk JWT verification and a dependency that exposes the authenticated user identity to protected routes.
 
@@ -118,7 +118,7 @@ Implement Clerk JWT verification and a dependency that exposes the authenticated
 
 ### T-008: Add user records and ownership scoping
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Persist the Clerk subject and user timezone, and establish query patterns that scope user data to its owner.
 
@@ -131,7 +131,7 @@ Persist the Clerk subject and user timezone, and establish query patterns that s
 
 ### T-009: Define shared API errors and validation
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Implement consistent API errors and shared validation behavior, including title length, URL length, and URL validity.
 
