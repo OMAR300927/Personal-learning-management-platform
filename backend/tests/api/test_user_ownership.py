@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.auth.dependencies import get_current_user, get_current_user_id
 from app.db.base import Base
+from app.db.deletion_ledger import get_deletion_ledger_session
 from app.db.session import get_session
 from app.models.user import User
 from app.services.ownership import get_owned_record
@@ -42,6 +43,7 @@ async def test_user_id(x_test_user: str = Header(alias="X-Test-User")) -> str:
 
 async def test_user_ownership(
     db_session: AsyncSession,
+    ledger_session: AsyncSession,
 ) -> None:
     """Ensure one authenticated user cannot read or modify another user's record."""
     db_session.add_all(
@@ -62,6 +64,10 @@ async def test_user_ownership(
     async def override_session() -> AsyncIterator[AsyncSession]:
         """Bind API requests to this test's isolated database session."""
         yield db_session
+
+    async def override_ledger_session() -> AsyncIterator[AsyncSession]:
+        """Bind access checks to this test's isolated deletion ledger."""
+        yield ledger_session
 
     @app.get("/records/{record_id}")
     async def read_record(
@@ -106,6 +112,7 @@ async def test_user_ownership(
 
     app.dependency_overrides[get_current_user_id] = test_user_id
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_deletion_ledger_session] = override_ledger_session
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

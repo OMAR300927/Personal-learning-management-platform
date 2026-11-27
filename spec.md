@@ -131,7 +131,7 @@ The MVP aims to:
 
 - **NFR-9:** Authentication and session management use Clerk.
 - **NFR-10:** Backend access checks enforce data ownership for every user-specific operation.
-- **NFR-11:** Account deletion removes all of the user's application data immediately, including data retained in backups.
+- **NFR-11:** Account deletion immediately blocks access and removes the user's live application data. Encrypted backups may retain data until their documented retention period expires; restore procedures must replay an independent deletion ledger before making restored data accessible.
 - **NFR-12:** Data changes and cascading deletions do not leave orphaned or cross-account records.
 
 ## 6. Constraints and Approved Assumptions
@@ -162,7 +162,7 @@ The MVP aims to:
 
 - **AC-1:** A user who needs an account from Login is directed to Register. After successful registration, the user lands on Login; after signing in using email/password or Google, the user lands on the Dashboard. Email verification is not required.
 - **AC-2:** Attempts to read or change another user's records are denied.
-- **AC-3:** Confirming account deletion permanently removes the account's application data immediately, including backups.
+- **AC-3:** Confirming account deletion immediately blocks access, deletes live application data, and requests Clerk identity deletion with safe retries. Encrypted backups expire automatically according to the documented retention policy, and the independent deletion ledger is replayed after backup restoration before the application becomes accessible.
 - **AC-4:** On session expiry, the exact agreed message is displayed; the user is sent to login, returned to the requested page after login, and their unsaved form changes are preserved.
 
 ### Learning data

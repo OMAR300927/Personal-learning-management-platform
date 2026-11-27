@@ -12,7 +12,7 @@ Use a **modular monolith**:
 
 - One React single-page application (SPA).
 - One FastAPI application exposing the backend API.
-- One relational database.
+- One relational application database and a separate managed PostgreSQL instance for the independent deletion ledger.
 - A lightweight scheduled worker, using the backend's domain logic, for weekly goal snapshots.
 
 The frontend, API, and worker may be deployed as separate processes, but they remain parts of one product and one codebase. Organize implementation around product domains and keep explicit boundaries between the UI, API, domain rules, persistence, authentication, and background processing.
@@ -38,6 +38,7 @@ The frontend, API, and worker may be deployed as separate processes, but they re
 | Database | SQLite initially; PostgreSQL for production | Follows the specified development and production database choices. |
 | API protocol | Versioned REST/JSON over HTTPS | A simple fit for the SPA and resource-oriented operations; OpenAPI documents the contract. |
 | Identity provider | Clerk | Required for authentication, Google sign-in, and session management. |
+| Deletion ledger | Separate managed PostgreSQL instance in production; separate SQLite file locally | Keeps deletion tombstones and Clerk retry state independent of application database backups. |
 | Test tools | pytest, Vitest, React Testing Library, and Playwright | Matches the confirmed backend, frontend, and focused browser testing approach. |
 
 No separate payment, maps, or email provider is required for the MVP. Authentication-related email flows are handled through Clerk.
@@ -65,6 +66,8 @@ No separate payment, maps, or email provider is required for the MVP. Authentica
 - Stores application records and enforces relational integrity.
 - Uses PostgreSQL in production and SQLite during the initial development phase.
 - Enforces important uniqueness and referential constraints in addition to API-level checks.
+- Stores account-deletion tombstones in a separate database. In production, the deletion ledger must use a distinct managed PostgreSQL instance, credentials, and backup/retention domain; local development uses a separate SQLite file.
+- Each authenticated request checks the independent ledger before resolving or creating an application user. Ledger unavailability fails closed.
 
 ### Weekly-goal snapshot worker
 
@@ -130,52 +133,41 @@ All user-owned records must be scoped to their owner. Use foreign keys and datab
 
 ### Account deletion
 
-Account deletion spans the application database, encryption key management, and Clerk, so it cannot be one atomic transaction. Use an idempotent deletion workflow that:
+Account deletion spans the application database and Clerk, so it cannot be one atomic transaction. Use an idempotent deletion workflow that:
 
 1. Revokes or blocks access to the account immediately.
-2. Destroys the user's data-encryption key to make retained backup copies unrecoverable.
+2. Writes a durable deletion record to the independent deletion ledger; this tombstone is the access-blocking source of truth.
 3. Deletes the user's live application records and related history.
-4. Deletes the Clerk identity, retrying safely if that external operation temporarily fails.
+4. Requests Clerk identity deletion, retrying safely if that external operation temporarily fails.
 5. Records operational success/failure without logging tokens or learning content, and alerts operators when retries require attention.
 
-The hosting and key-management provider must be verified to support the approved immediate crypto-erasure requirement before provider selection. Ordinary backups alone cannot guarantee immediate physical removal; crypto-erasure is the approved strategy for immediate unrecoverability.
+Encrypted database backups may retain deleted-user data until the documented retention period expires. Backup retention and expiry must be enforced automatically. The deletion ledger must be stored independently of application database backups and remain available if an application backup is restored. Keep each deletion record until every backup capable of restoring that account has expired. Before restored application data is made accessible, the restore procedure must replay the ledger and remove or block every account recorded as deleted.
 
-### Per-user encryption and crypto-erasure design
+The API replays all ledger tombstones during startup and does not serve requests if replay fails. Apply the independent ledger schema with `uv run alembic -c alembic-deletion-ledger.ini upgrade head` before starting the API. The scheduled backend worker retries pending Clerk deletions; deployment monitoring must alert on the `account_deletion_clerk_retry_required`, `account_deletion_database_failure`, `account_deletion_ledger_access_check_failed`, and `account_deletion_restore_replay_failure` log events.
 
-- Every user-owned application record and associated history is encrypted with a per-user data-encryption key (DEK) before it is written to the database or any durable storage. Provider-managed database encryption alone is insufficient because it does not support deleting one user's data from shared backups.
-- The DEK is generated with a cryptographically secure random source and exists in plaintext only in process memory while data is encrypted or decrypted. The persisted DEK is stored only as ciphertext, wrapped by a per-user key-encryption key (KEK) managed by the selected key-management provider.
-- The application stores only the user-to-key reference, wrapped DEK, key version, and encryption metadata required for decryption. It never logs plaintext keys, wrapped keys, plaintext learning content, or access tokens.
-- Account deletion first marks the account as deletion-blocked and revokes application access. It then destroys the user's KEK through an idempotent key-management operation. Only after successful key destruction does it delete live application records and request Clerk identity deletion.
-- If key destruction fails, the workflow does not claim successful deletion and does not proceed as though backups are unrecoverable. Access remains blocked, the failure is recorded without sensitive values, and an alert triggers retry handling. Clerk deletion failures are retried independently after the application data key has been destroyed; retries never recreate the key or restore application data.
-- Existing database, object-storage, and backup copies may remain physically present for their retention period, but they must contain only ciphertext. Once the user's KEK is irreversibly destroyed, the retained ciphertext and wrapped DEK are computationally unrecoverable. Restoration procedures must not restore a usable key or reactivate a deleted account.
+### Data protection and backup deletion
 
-### Provider verification gate
-
-Production hosting and key-management providers remain unselected until all of these capabilities are verified in writing and in a controlled smoke test:
-
-- Per-user KEK creation, isolation, and access control with no operator access to plaintext keys.
-- Irreversible destruction with no mandatory recovery window, including provider-managed backups, replicas, and key-version copies.
-- Idempotent destruction and auditable success/failure results suitable for retrying the deletion workflow.
-- Regional availability, durable key metadata, service limits, and an availability/failure model compatible with the API and worker.
-- Secure secret storage, TLS, restricted workload identity, monitoring, and alerts for key-destruction failures.
-- Backup and restore behavior that cannot recover deleted users' plaintext data or recreate their KEKs.
-
-If a provider offers only scheduled deletion, soft deletion, revocation, disablement, or a recovery window, it does not satisfy the MVP's immediate crypto-erasure requirement.
+- Production database storage and backups must be encrypted at rest. All production client-to-service communication must use HTTPS/TLS.
+- Clerk manages authentication credentials, including password storage and password hashing. The application does not store user passwords.
+- Application-level per-user encryption, envelope encryption, KMS integration for per-user keys, and immediate cryptographic erasure are out of MVP scope.
+- Google Cloud KMS will not be integrated for per-user application data encryption in the MVP.
+- Backup retention duration and production providers remain operational decisions. They must be resolved before production launch with automatic backup expiry and independent ledger durability in place.
 
 ## 8. Background Processing
 
-Use one lightweight scheduled worker for weekly goal snapshot finalization. It should share backend domain rules rather than reimplementing them.
+Use one lightweight scheduled worker for weekly goal snapshot finalization and retrying pending Clerk account deletions. It should share backend domain rules rather than reimplementing them.
 
 - Use each user's timezone to determine the boundary.
 - Reconstruct state as of the boundary using timestamped changes.
 - Store snapshots atomically and enforce uniqueness so reruns are safe.
 - Retry transient failures and surface persistent failures through monitoring/alerts.
+- Schedule the worker frequently enough for account-deletion retries; set and monitor its production cadence as part of T-031.
 - Do not add a queue or separate job platform unless later operational needs require one.
 
 ## 9. External Integrations
 
 - **Clerk:** Authentication, sessions, Google sign-in, and identity deletion.
-- **Managed hosting and key management:** Provider selection remains open. Selection must satisfy deployment, database, worker scheduling, secrets, backup, and crypto-erasure needs.
+- **Managed hosting and backup storage:** Provider selection remains open. Selection must support deployment, application and independent ledger databases, worker scheduling, secrets, encryption at rest, backup retention/expiry, and restoration from the deletion ledger.
 - No other external integrations are required for the MVP.
 
 ## 10. Security and Operational Considerations
@@ -187,8 +179,9 @@ Use one lightweight scheduled worker for weekly goal snapshot finalization. It s
 - Consider rate limits for authentication-adjacent and write endpoints.
 - Do not log session tokens, passwords, encryption keys, or users' learning content.
 - Monitor API errors, database availability, worker execution, snapshot failures, and account-deletion retries.
-- Verify backup and key-management behavior against immediate crypto-erasure before launch.
-- Document restoration procedures that do not restore deleted users' recoverable data.
+- Encrypt production database storage and backups at rest, use HTTPS/TLS, and keep application passwords delegated to Clerk.
+- Automatically expire encrypted backups according to the documented retention policy.
+- Keep the deletion ledger independent of application-backup restoration and replay it before restored data becomes accessible.
 
 ## 11. Testing Strategy
 
@@ -203,10 +196,10 @@ Use one lightweight scheduled worker for weekly goal snapshot finalization. It s
 ## 12. Hosting and Deployment
 
 - Managed hosting is approved; the specific vendors and production domain remain undecided.
-- Prefer a deployment that can run the web app, FastAPI API, PostgreSQL, and scheduled worker with secure secret management and required key-destruction capabilities.
+- Prefer a deployment that can run the web app, FastAPI API, PostgreSQL, and scheduled worker with secure secret management, encrypted backups, retention expiry, and independent deletion-ledger support.
 - Keep the frontend and API behind one application domain where practical, while preserving clear service boundaries.
 - Deploy database schema changes through Alembic migrations.
-- Select providers only after confirming regions, operational fit, cost, backup behavior, and immediate crypto-erasure support.
+- Select providers only after confirming regions, operational fit, cost, encryption at rest, backup retention/expiry, and restore behavior.
 
 ## 13. Architectural Boundaries
 
@@ -220,7 +213,8 @@ Use one lightweight scheduled worker for weekly goal snapshot finalization. It s
 
 ## 14. Decisions Still Open
 
-- Managed hosting and key-management vendors, including verified support for immediate crypto-erasure.
+- Managed hosting/database/backup vendors and regions.
+- Backup retention duration and the managed providers for the application database, deletion ledger, and backups.
 - Production domain and deployment regions.
 - When pull-request test automation should be introduced.
 - PostgreSQL test execution is deferred until the production database migration work.

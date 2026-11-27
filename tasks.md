@@ -2,7 +2,7 @@
 
 This plan follows a backend-first workflow: complete and verify the backend API before building the frontend against it. Each task has a bounded scope, dependencies, and completion criteria. Tasks within a phase may proceed in parallel only when their dependencies allow it.
 
-Product requirements are in [spec.md](./spec.md), architecture decisions are in [plan.md](./plan.md), and the approved application layouts are in [backend-strucutre.md](./backend-strucutre.md) and [frontend-structure.md](./frontend-structure.md).
+Product requirements are in [spec.md](./spec.md), architecture decisions are in [plan.md](./plan.md), and the approved application layouts are in [backend-strucuture.md](./backend-strucuture.md) and [frontend-structure.md](./frontend-structure.md).
 
 ## Phase 0 — Resolve implementation-critical details
 
@@ -27,24 +27,11 @@ Clarify how week-boundary snapshots treat tasks or paths deleted before snapshot
 - Timezone changes regroup only entries in weeks that have not been finalized, using the new timezone. Entries may become locked if their recalculated week has ended.
 - Finalized learning-time history and goal snapshots remain immutable across timezone changes.
 
-### T-002: Verify crypto-erasure feasibility
+### T-002: Verify crypto-erasure feasibility (superseded for MVP)
 
 - [x] **Task complete**
 
-Design and verify the per-user encryption-key approach needed to make account data in backups unrecoverable immediately.
-
-**Completion Criteria**
-
-- A reviewed design specifies key creation, usage, destruction, failure behavior, and backup implications.
-- Hosting and key-management provider requirements are recorded.
-- Provider selection and production launch remain blocked until the required key-destruction capability is verified.
-
-**Design decision**
-
-- Use envelope encryption with a per-user DEK and a per-user KEK managed by the selected key-management provider. User-owned records and history are persisted as ciphertext; only wrapped DEKs and key metadata are durable.
-- On deletion, block access first, destroy the KEK irreversibly, then delete live records and request Clerk identity deletion. Key-destruction failure is fail-closed: access stays blocked, the workflow reports failure and alerts operators, and retries are idempotent. Clerk failures retry independently without restoring data or keys.
-- Backups and replicas may retain ciphertext during their retention period, but destruction of the KEK must make those copies computationally unrecoverable. Restoration must not recreate a deleted KEK or reactivate the account.
-- Production remains blocked until a provider is verified to support immediate irreversible destruction across key versions, replicas, and provider-managed backups. Scheduled deletion, disablement, revocation, or a recovery window is insufficient.
+The original design decision required immediate crypto-erasure using per-user envelope encryption. That requirement is superseded for the MVP by the approved encrypted-backup retention and independent deletion-ledger approach recorded in [plan.md](./plan.md). Per-user keys, application-level envelope encryption, and KMS integration are deferred to a future phase if product requirements justify them.
 
 ## Phase 1 — Backend foundation
 
@@ -144,11 +131,11 @@ Implement consistent API errors and shared validation behavior, including title 
 
 ## Phase 2 — Backend product APIs
 
-- [ ] **Phase complete**
+- [x] **Phase complete**
 
 ### T-010: Implement learning paths and stages
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add database models, migrations, schemas, services, and routes for paths and stages.
 
@@ -162,7 +149,7 @@ Add database models, migrations, schemas, services, and routes for paths and sta
 
 ### T-011: Implement tasks, statuses, and path completion
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add task management, ordering, status values, timestamped status history, and completion calculations.
 
@@ -177,7 +164,7 @@ Add task management, ordering, status values, timestamped status history, and co
 
 ### T-012: Implement links and path/stage deletion behavior
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Support links attached to paths, stages, and tasks; implement the agreed cascade rules.
 
@@ -192,7 +179,7 @@ Support links attached to paths, stages, and tasks; implement the agreed cascade
 
 ### T-013: Implement path-level learning-time tracking
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add dated learning-time entries, validation, week grouping, and history-lock behavior.
 
@@ -209,7 +196,7 @@ Add dated learning-time entries, validation, week grouping, and history-lock beh
 
 ### T-014: Implement weekly goals and active-week progress
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add overall and path-specific hour/task goals, progress calculation, and uniqueness rules.
 
@@ -225,7 +212,7 @@ Add overall and path-specific hour/task goals, progress calculation, and uniquen
 
 ### T-015: Implement immutable goal snapshots and scheduled processing
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Add snapshot persistence and the scheduled worker, reusing weekly-goal service logic.
 
@@ -241,7 +228,7 @@ Add snapshot persistence and the scheduled worker, reusing weekly-goal service l
 
 ### T-016: Implement dashboard aggregation APIs
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Provide weekly, monthly, and per-path statistics for the Dashboard.
 
@@ -255,23 +242,28 @@ Provide weekly, monthly, and per-path statistics for the Dashboard.
 
 ### T-017: Implement account deletion orchestration
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
-Implement the idempotent account deletion workflow across access revocation, per-user key destruction, application records, and Clerk.
+Implement idempotent account deletion across immediate access blocking, the independent deletion ledger, live application records, and Clerk.
 
-**Depends on:** T-002, T-008, T-010, T-011, T-013, T-014, T-015
+**Depends on:** T-008, T-010, T-011, T-013, T-014, T-015
 
 **Completion Criteria**
 
 - Account access is blocked immediately when deletion starts.
-- The user's data key is destroyed and all live application records and history are removed.
-- Clerk deletion failures can be retried safely without restoring user data.
-- Operational failures generate an alert; logs exclude tokens, keys, and learning content.
-- Tests cover success, retries, and partial external-service failures.
+- An independent deletion-ledger entry is durably recorded in the separate ledger database before application data is removed.
+- Production ledger records are retained until every backup capable of restoring that account has expired; application code never automatically purges tombstones.
+- The user's live application records and history are deleted.
+- Clerk account deletion is requested and failures can be retried safely without restoring user data or access.
+- Startup replays the ledger before serving API requests; startup fails if replay cannot complete.
+- Operational failures emit a safe alert event; logs exclude tokens, keys, and learning content.
+- Tests cover success, retries, partial Clerk failures, access blocking, and deletion-ledger replay after restore.
+
+**Operational dependency:** T-031 selects and enforces the encrypted-backup retention and automatic-expiry policy. The production ledger must be independently backed up and retained beyond every application backup that can contain the deleted account.
 
 ### T-018: Verify backend API contract and critical behavior
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Review the complete OpenAPI contract and run the backend unit/API/worker tests against the approved requirements.
 
@@ -467,21 +459,22 @@ Configure managed PostgreSQL and apply Alembic migrations; add PostgreSQL-backed
 
 - [ ] **Task complete**
 
-Select managed hosting and key management; configure secrets, HTTPS, CORS, worker scheduling, monitoring, and deletion-safe backup procedures.
+Select managed hosting; configure secrets, HTTPS, CORS, worker scheduling, monitoring, encrypted backups, automatic retention expiry, and deletion-ledger restore procedures.
 
-**Depends on:** T-002, T-015, T-017, T-030
+**Depends on:** T-015, T-017, T-030
 
 **Completion Criteria**
 
-- Provider capabilities satisfy the crypto-erasure requirement.
+- Production database and backup storage are encrypted at rest, and connections use HTTPS/TLS.
+- The documented backup retention policy is enforced automatically.
 - A production-like deployment runs the web app, API, database, and worker.
 - Operational alerts and account-deletion failure handling are verified.
-- Backup restoration procedures cannot restore deleted users' recoverable data.
+- Backup restoration replays the independent deletion ledger before application access is enabled.
 
 ## Sequencing Notes
 
 - The workflow is backend-first: finish the backend API and its critical SQLite tests before scaffolding the frontend.
-- T-001 and T-002 are implementation/design prerequisites for snapshots and deletion. Backend scaffolding can proceed while these are being resolved.
+- T-001 is an implementation prerequisite for snapshots. T-002's immediate crypto-erasure design has been superseded for the MVP; account deletion uses the independent deletion-ledger and backup-retention approach in T-017.
 - Once the backend API contract is reviewed in T-018, frontend work proceeds against that contract.
 - SQLite is the initial development and test database. PostgreSQL-backed integration tests are added during the production database migration.
 - Tests are run locally for now. Pull-request CI automation remains undecided and is not included as a required task.

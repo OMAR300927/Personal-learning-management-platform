@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,15 +11,29 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"
     database_url: str = "sqlite+aiosqlite:///./data/app.db"
+    deletion_ledger_database_url: str = (
+        "sqlite+aiosqlite:///./data/deletion-ledger.db"
+    )
     clerk_jwt_issuer: str = ""
     clerk_jwks_url: str = ""
     clerk_authorized_parties: str = ""
+    clerk_secret_key: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def validate_deletion_ledger_database(self) -> "Settings":
+        """Require deletion records to use a separately configured database."""
+        if self.database_url == self.deletion_ledger_database_url:
+            raise ValueError(
+                "The deletion ledger database must differ from the application database"
+            )
+
+        return self
 
 
 @lru_cache
