@@ -41,7 +41,7 @@ The MVP aims to:
 ### 3.1 Accounts and sessions
 
 - **FR-1:** Users can register and sign in through Clerk using email/password or Google.
-- **FR-2:** If a user at Login needs an account, the application directs them to Register. After successful registration, the user is redirected to Login and must sign in before accessing the Dashboard. Email verification is not required.
+- **FR-2:** If an email submitted at Login has no account, the application stays on Login and displays a message instructing the user to register. After successful email/password registration, the user is redirected to Login and must sign in before accessing the Dashboard. Google sign-in may create an account on the first successful OAuth attempt; successful Google sign-in or registration takes the user to the Dashboard. Email verification is not required.
 - **FR-3:** Users can access only their own application data.
 - **FR-4:** Users can permanently delete their account and all associated data immediately.
 - **FR-5:** When a session expires, the application displays: “Your session has expired. Please log in.” It redirects the user to login and, after successful login, returns them to the originally requested page.
@@ -160,7 +160,7 @@ The MVP aims to:
 
 ### Accounts and sessions
 
-- **AC-1:** A user who needs an account from Login is directed to Register. After successful registration, the user lands on Login; after signing in using email/password or Google, the user lands on the Dashboard. Email verification is not required.
+- **AC-1:** An unknown email entered at Login shows a register-first message without leaving Login. Email/password registration returns the user to Login, where they must sign in to reach the Dashboard. A successful Google sign-in or registration takes the user directly to the Dashboard. Email verification is not required.
 - **AC-2:** Attempts to read or change another user's records are denied.
 - **AC-3:** Confirming account deletion immediately blocks access, deletes live application data, and requests Clerk identity deletion with safe retries. Encrypted backups expire automatically according to the documented retention policy, and the independent deletion ledger is replayed after backup restoration before the application becomes accessible.
 - **AC-4:** On session expiry, the exact agreed message is displayed; the user is sent to login, returned to the requested page after login, and their unsaved form changes are preserved.

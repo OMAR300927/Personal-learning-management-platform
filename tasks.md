@@ -278,11 +278,11 @@ Review the complete OpenAPI contract and run the backend unit/API/worker tests a
 
 ## Phase 3 — Frontend foundation and authentication
 
-- [ ] **Phase complete**
+- [x] **Phase complete**
 
 ### T-019: Scaffold the frontend application
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Configure React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, and global providers.
 
@@ -296,7 +296,7 @@ Configure React, TypeScript, Vite, Tailwind CSS, React Router, TanStack Query, a
 
 ### T-020: Establish frontend test tooling
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Configure Vitest, React Testing Library, and shared frontend test helpers.
 
@@ -309,21 +309,22 @@ Configure Vitest, React Testing Library, and shared frontend test helpers.
 
 ### T-021: Implement Clerk login and registration UI
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
-Integrate Clerk login and registration pages with the agreed registration-to-login-to-Dashboard flow.
+Integrate Clerk login and registration pages with the agreed email and Google authentication flows.
 
 **Depends on:** T-019
 
 **Completion Criteria**
 
 - Email/password and Google flows are wired through Clerk.
-- Registration returns the user to Login; successful sign-in leads to the Dashboard.
+- Unknown emails at Login show a register-first message; email registration returns the user to Login.
+- Successful Google sign-in or registration takes the user to the Dashboard.
 - Protected frontend routes require an authenticated session.
 
 ### T-022: Implement the authenticated API client and session-expiry recovery
 
-- [ ] **Task complete**
+- [x] **Task complete**
 
 Attach Clerk tokens to API requests and handle expired sessions in the frontend.
 

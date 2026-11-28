@@ -4,6 +4,7 @@
 - Before implementing a task, read the relevant requirements, decisions, tasks, and structure documents. Do not assume that referenced documents have already been loaded.
 - Respect the approved project structure.
 - Inspect existing files and patterns before making changes.
+- For UI work, use the images in `UI-design/` as visual references. Apply their visual style and layout patterns to this product without copying unrelated content.
 - Implement only the assigned task, and stop to request approval when decisions are unresolved or architectural changes are needed.
 - Do not introduce a new technology or major dependency without approval.
 - Run relevant existing tests after each task. Run the full test suite when required by the project's testing policy or when changes may affect broader functionality. Report the test commands and results, and suggest additional tests when needed.
